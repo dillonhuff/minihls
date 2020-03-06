@@ -40,7 +40,7 @@ instruction_binding* rd_wire_binding(block& blk, int width) {
     return blk.get_instruction_binding(name);
   }
 
-  return blk.add_instruction_binding(name);
+  return blk.add_instruction_binding(name, "out", {});
 }
 
 instruction_binding* wr_wire_binding(block& blk, int width) {
@@ -49,7 +49,7 @@ instruction_binding* wr_wire_binding(block& blk, int width) {
     return blk.get_instruction_binding(name);
   }
 
-  return blk.add_instruction_binding(name);
+  return blk.add_instruction_binding(name, "", {{0, "in"}});
 }
 
 instruction_type* wr_wire_instr(block& blk, int width) {

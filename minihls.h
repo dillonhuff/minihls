@@ -77,7 +77,11 @@ class instruction_type {
 };
 
 class instruction_binding {
+  public:
 
+    string name;
+    string output_wire;
+    map<int, string> arg_map;
 };
 
 class instruction_instance {
@@ -85,7 +89,12 @@ class instruction_instance {
   public:
     string name;
     module_instance* unit;
+    instruction_binding* binding;
     vector<instruction_instance*> operands;
+
+    instruction_binding* get_binding() const {
+      return binding;
+    }
 
     string get_name() const {
       return name;
@@ -101,7 +110,7 @@ class instruction_instance {
     }
 
     void bind_procedure(instruction_binding* p) {
-
+      binding = p;
     }
 };
 
@@ -118,6 +127,13 @@ class micro_architecture {
     schedule sched;
     map<instr*, map<int, string> > source_registers;
     map<instr*, map<int, string> > source_wires;
+
+    string wire_at(const int stage, const instr* v) {
+      assert(contains_key(v, source_wires));
+      auto wires = map_find(v, source_wires);
+      assert(contains_key(stage, wires));
+      return map_find(stage, wires);
+    }
 };
 
 template<typename N, typename E>
@@ -312,8 +328,14 @@ class block {
     return instr;
   }
 
-  instruction_binding* add_instruction_binding(const std::string& name) {
+  instruction_binding*
+    add_instruction_binding(const std::string& name,
+        const string& output_wire,
+        const map<int, string>& arg_map) {
     auto inst = new instruction_binding();
+    inst->name = name;
+    inst->output_wire = output_wire;
+    inst->arg_map = arg_map;
     instruction_bindings[name] = inst;
     return inst;
   }
@@ -453,6 +475,10 @@ void emit_verilog(block& blk) {
     out << tab(1) << "// Bindings to " << m->get_name() << endl;
     for (auto bound_instr : blk.bound_instrs(m)) {
       out << tab(2) << "// " << bound_instr->get_name() << endl;
+      auto binding = bound_instr->get_binding();
+      for (auto b : binding->arg_map) {
+        out << tab(3) << b.first << " -> " << b.second << endl;
+      }
     }
   }
   out << "endmodule" << endl;
