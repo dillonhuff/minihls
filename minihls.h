@@ -102,6 +102,9 @@ class instruction_binding {
     map<int, string> arg_map;
     instruction_type* target;
     module_type* mtp;
+    int latency;
+
+    int get_latency() const { return latency; }
 
     string get_name() const { return name; }
 
@@ -169,6 +172,27 @@ class schedule {
     map<instr*, int> start_times;
     map<instr*, int> end_times;
 
+    int last_use_time(instr* v) const {
+      int utime = -1;
+      for (auto s : start_times) {
+        instr* user = s.first;
+        for (auto op : user->operands) {
+          if (op == v) {
+            cout << "User: " << user->get_name() << ": " << s.second << endl;
+            if (utime < s.second) {
+              utime = s.second;
+            }
+          }
+        }
+      }
+
+      cout << "No users for: " << v->get_name() << endl;
+
+      assert(utime >= 0);
+
+      return utime;
+    }
+
     int num_stages() const {
       int ns = 0;
       for (auto e : end_times) {
@@ -189,6 +213,7 @@ class micro_architecture {
     string wire_at(const int stage, instr* v) {
       assert(contains_key(v, source_wires));
       auto wires = map_find(v, source_wires);
+      cout << "Finding " << v->get_name() << " in stage: " << stage << endl;
       assert(contains_key(stage, wires));
       return map_find(stage, wires);
     }
@@ -322,8 +347,7 @@ class block {
       constraints.add_edge("$base", startstr(i), 0);
       constraints.add_edge("$base", endstr(i), 0);
 
-      // Assume latency 0 for now
-      diff_eq(constraints, startstr(i), endstr(i), 0);
+      diff_eq(constraints, startstr(i), endstr(i), i->get_binding()->get_latency());
     }
     
     for (pair<string, instr*> instr : instrs) {
@@ -392,8 +416,13 @@ class block {
 
     for (auto instrP : instrs) {
       auto instr = instrP.second;
-      arch.source_wires[instr][arch.sched.start_times[instr]] =
-        instr->get_name();
+      if (instr->has_output()) {
+        arch.source_wires[instr][arch.sched.end_times[instr]] =
+          instr->get_name();
+        for (int s = arch.sched.end_times[instr] + 1; s < arch.sched.last_use_time(instr); s++) {
+          arch.source_wires[instr][s] = instr->get_name() + "_out";
+        }
+      }
     }
   }
 
@@ -423,12 +452,23 @@ class block {
         module_type* mtp,
         const string& output_wire,
         const map<int, string>& arg_map) {
+      return add_instruction_binding(name, target, mtp, output_wire, arg_map, 0);
+    }
+
+  instruction_binding*
+    add_instruction_binding(const std::string& name,
+        instruction_type* target,
+        module_type* mtp,
+        const string& output_wire,
+        const map<int, string>& arg_map,
+        const int latency) {
       auto inst = new instruction_binding();
     inst->name = name;
     inst->target = target;
     inst->mtp = mtp;
     inst->output_wire = output_wire;
     inst->arg_map = arg_map;
+    inst->latency = latency;
     instruction_bindings[name] = inst;
     return inst;
   }
@@ -596,9 +636,23 @@ void emit_verilog(block& blk) {
   }
   out << endl;
 
-  out << tab(1) << "assign " << blk.stage_active_var(0) << " = start;" << endl;
+  out << tab(1) << "assign " << blk.stage_active_var(0) << " = start | " << blk.stage_active_var(1) << ";" << endl;
   out << tab(1) << "assign done = " << blk.stage_active_var(blk.arch.sched.num_stages() - 1) << ";" << endl;
   out << endl;
+
+  out << tab(1) << "always @(posedge clk) begin" << endl;
+  out << tab(2) << "if (rst) begin" << endl;
+  for (int i = 1; i < blk.arch.sched.num_stages(); i++) {
+    out << tab(3) << blk.stage_active_var(i) << " <= 0;" << endl;
+  }
+  out << tab(2) << "end else begin" << endl;
+  for (int i = 1; i < blk.arch.sched.num_stages(); i++) {
+    out << tab(3) << blk.stage_active_var(i) << " <= " << blk.stage_active_var(i - 1) << ";" << endl;
+  }
+  out << tab(2) << "end" << endl;
+  out << tab(1) << "end" << endl;
+
+  out << endl << endl;
 
   for (auto m : blk.instance_set()) {
     if (m->is_internal()) {
