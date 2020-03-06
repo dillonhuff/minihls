@@ -24,7 +24,10 @@ class instruction_binding {
 };
 
 class instruction_instance {
+  
   public:
+
+    vector<instruction_instance*> operands;
 
     void bind_unit(module_instance* unit) {
 
@@ -36,6 +39,15 @@ class instruction_instance {
 };
 
 typedef instruction_instance instr;
+
+class schedule {
+
+  public:
+
+  map<instr*, int> start_times;
+  map<instr*, int> end_times;
+
+};
 
 class block {
 
@@ -56,14 +68,33 @@ class block {
     return pre + "_" + to_string(n);
   }
 
-  void schedule() {
+  void asap_schedule() {
 
+    //schedule sched;
+
+    //set<instr*> active;
+    //set<instr*> done;    
+
+    //int time = 0;
+    //while (done.size() < instrs.size()) {
+
+    //}
+
+    cout << "Done with scheduling" << endl;
   }
 
-  instr* add_instr(const std::string& name, instruction_type*) {
+  instr* add_instr(const std::string& name, instruction_type* tp) {
+    vector<instr*> noargs;
+    return add_instr(name, tp, noargs);
+  }
+  
+  instr* add_instr(const std::string& name, instruction_type* tp,
+      const vector<instr*>& args) {
+
     assert(!contains_key(name, instrs));
 
     auto instr = new instruction_instance();
+    instr->operands = args;
     instrs[name] = instr;
 
     return instr;

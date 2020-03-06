@@ -79,7 +79,7 @@ instr* wire_write(block& blk, const string& arg_name, int width, instr* arg) {
   instruction_type* instr_tp =
     wr_wire_instr(blk, width);
 
-  auto instr = blk.add_instr(blk.unique_name("wr"), instr_tp);
+  auto instr = blk.add_instr(blk.unique_name("wr"), instr_tp, {arg});
   instr->bind_procedure(rd_wire);
   instr->bind_unit(arg_wire);
 
@@ -109,7 +109,7 @@ TEST_CASE("Create program") {
   auto rdin = wire_read(blk, "val_in", 32);
   auto wrout = wire_write(blk, "val_out", 32, rdin);
 
-  blk.schedule();
+  blk.asap_schedule();
 }
 
 
