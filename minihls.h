@@ -153,8 +153,6 @@ template<typename N, typename E>
 void diff_eq(DirectedGraph<N, E>& g, const N& a, const N& b, const E& v) {
   diff_lte(g, a, b, v);
   diff_lte(g, a, b, -v);
-  //g.add_edge(a, b, v);
-  //g.add_edge(a, b, -v);
 }
 
 string endstr(instr* i) {
@@ -212,7 +210,6 @@ class block {
 
       // Assume latency 0 for now
       diff_eq(constraints, startstr(i), endstr(i), 1);
-      //constraints.add_edge(endstr(i), startstr(i), 0);
     }
     
     for (pair<string, instr*> instr : instrs) {
