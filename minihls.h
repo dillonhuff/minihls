@@ -45,6 +45,8 @@ class module_type {
 
     string name;
     vector<Port> ports;
+
+    string get_name() const { return name; }
 };
 
 class module_instance {
@@ -54,6 +56,8 @@ class module_instance {
     string name;
     module_type* tp;
     bool internal;
+
+    module_type* get_type() const { return tp; }
 
     Port get_port(const string& n) const {
       for (auto p : tp->ports) {
@@ -83,7 +87,11 @@ class module_instance {
 };
 
 class instruction_type {
+  public:
 
+    string name;
+
+    string get_name() const { return name; }
 };
 
 class instruction_binding {
@@ -92,6 +100,18 @@ class instruction_binding {
     string name;
     string output_wire;
     map<int, string> arg_map;
+    instruction_type* target;
+    module_type* mtp;
+
+    string get_name() const { return name; }
+
+    module_type* mod_type() const {
+      return mtp;
+    }
+
+    instruction_type* target_instr() const {
+      return target;
+    }
 };
 
 class instruction_instance {
@@ -101,8 +121,18 @@ class instruction_instance {
     module_instance* unit;
     instruction_binding* binding;
     vector<instruction_instance*> operands;
+    instruction_type* tp;
+
+    instruction_type* get_type() const {
+      return tp;
+    }
+
+    bool is_bound() const {
+      return binding != nullptr;
+    }
 
     bool has_output() const {
+      assert(is_bound());
       return get_binding()->output_wire != "";
     }
 
@@ -231,6 +261,14 @@ class block {
   string name;
 
   block() : un(0) {}
+
+  set<instruction_binding*> all_bindings() const {
+    set<instruction_binding*> bs;
+    for (auto b : instruction_bindings) {
+      bs.insert(b.second);
+    }
+    return bs;
+  }
 
   set<instr*> all_instrs() const {
     set<instr*> allis;
@@ -370,19 +408,25 @@ class block {
     assert(!contains_key(name, instrs));
 
     auto instr = new instruction_instance();
+    instr->binding = nullptr;
     instr->name = name;
     instr->operands = args;
     instrs[name] = instr;
+    instr->tp = tp;
 
     return instr;
   }
 
   instruction_binding*
     add_instruction_binding(const std::string& name,
+        instruction_type* target,
+        module_type* mtp,
         const string& output_wire,
         const map<int, string>& arg_map) {
-    auto inst = new instruction_binding();
+      auto inst = new instruction_binding();
     inst->name = name;
+    inst->target = target;
+    inst->mtp = mtp;
     inst->output_wire = output_wire;
     inst->arg_map = arg_map;
     instruction_bindings[name] = inst;
@@ -467,6 +511,27 @@ void asap_schedule(block& blk) {
 
 static inline
 void finish_binding(block& blk) {
+  for (auto instr : blk.all_instrs()) {
+    
+    if (!instr->is_bound()) {
+      bool bound = false;
+
+      for (auto binding : blk.all_bindings()) {
+        cout << "Trying binding: " << binding->get_name() << endl;
+
+        if (binding->target_instr() == instr->get_type()) {
+          instr->bind_unit(blk.add_inst(
+                blk.unique_name(instr->get_name()),
+                binding->mod_type()));
+          instr->bind_procedure(binding);
+          bound = true;
+          break;
+        }
+      }
+
+      assert(bound);
+    }
+  }
 }
 
 static inline
@@ -538,6 +603,16 @@ void emit_verilog(block& blk) {
   for (auto m : blk.instance_set()) {
     if (m->is_internal()) {
       out << tab(1) << "// " << m->get_name() << endl;
+      vector<string> port_strings;
+      vector<string> port_decls_strings;
+      for (auto pt : m->get_type()->ports) {
+        port_strings.push_back("." + pt.name + "(" + m->get_name() + "_" + pt.name + ")");
+        port_decls_strings.push_back(pt.system_verilog_type_string() + " " + m->get_name() + "_" + pt.name + ";");
+      }
+      out << tab(1) << sep_list(port_decls_strings, "", "", "\n" + tab(1)) << endl;
+
+      out << tab(1) << m->get_type()->get_name() << " " << m->get_name()
+        << "(" << comma_list(port_strings) << ");" << endl;
     }
 
     out << tab(1) << "// Bindings to " << m->get_name() << endl;
@@ -548,6 +623,8 @@ void emit_verilog(block& blk) {
         out << tab(1) << "assign " << bound_instr->get_name() << " = " << bound_instr->get_unit()->get_name() << "_" << binding->output_wire << ";" << endl;
       }
       for (auto b : binding->arg_map) {
+        cout << "Getting operand: " << b.first << " of " << bound_instr->get_name() << endl;
+        assert(bound_instr->operands.size() >= b.first);
         out << tab(1) << "assign "
           << bound_instr->get_unit()->get_name() << "_" << b.second
           << " = "
@@ -555,6 +632,8 @@ void emit_verilog(block& blk) {
           << ";" << endl;
       }
     }
+
+    out << endl;
   }
 
   out << endl;
