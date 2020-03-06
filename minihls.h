@@ -55,6 +55,16 @@ class module_instance {
     module_type* tp;
     bool internal;
 
+    Port get_port(const string& n) const {
+      for (auto p : tp->ports) {
+        if (p.name == n) {
+          return p;
+        }
+      }
+      cout << "Error: No port named " << n << endl;
+      assert(false);
+    }
+
     vector<Port> ports() const {
       return tp->ports;
     }
@@ -92,6 +102,14 @@ class instruction_instance {
     instruction_binding* binding;
     vector<instruction_instance*> operands;
 
+    bool has_output() const {
+      return get_binding()->output_wire != "";
+    }
+
+    Port output_port() const {
+      return unit->get_port(get_binding()->output_wire);
+    }
+
     instruction_binding* get_binding() const {
       return binding;
     }
@@ -120,6 +138,16 @@ class schedule {
   public:
     map<instr*, int> start_times;
     map<instr*, int> end_times;
+
+    int num_stages() const {
+      int ns = 0;
+      for (auto e : end_times) {
+        if (e.second > ns){
+          ns = e.second;
+        }
+      }
+      return ns + 1;
+    }
 };
 
 class micro_architecture {
@@ -128,7 +156,7 @@ class micro_architecture {
     map<instr*, map<int, string> > source_registers;
     map<instr*, map<int, string> > source_wires;
 
-    string wire_at(const int stage, const instr* v) {
+    string wire_at(const int stage, instr* v) {
       assert(contains_key(v, source_wires));
       auto wires = map_find(v, source_wires);
       assert(contains_key(stage, wires));
@@ -199,9 +227,22 @@ class block {
 
   public:
 
+  micro_architecture arch;
   string name;
 
   block() : un(0) {}
+
+  set<instr*> all_instrs() const {
+    set<instr*> allis;
+    for (auto i : instrs) {
+      allis.insert(i.second);
+    }
+    return allis;
+  }
+
+  string stage_active_var(const int i) const {
+    return "stage_" + to_string(i) + "_active";
+  }
 
   set<instr*> bound_instrs(module_instance* inst) {
     set<instr*> bnd;
@@ -244,7 +285,7 @@ class block {
       constraints.add_edge("$base", endstr(i), 0);
 
       // Assume latency 0 for now
-      diff_eq(constraints, startstr(i), endstr(i), 1);
+      diff_eq(constraints, startstr(i), endstr(i), 0);
     }
     
     for (pair<string, instr*> instr : instrs) {
@@ -307,6 +348,14 @@ class block {
       auto instr = instrP.second;
       cout << "Start of " << startstr(instr) << " -> " << sched.start_times[instr] << endl;
       cout << "End of " << startstr(instr) << " -> " << sched.end_times[instr] << endl;
+    }
+
+    arch.sched = sched;
+
+    for (auto instrP : instrs) {
+      auto instr = instrP.second;
+      arch.source_wires[instr][arch.sched.start_times[instr]] =
+        instr->get_name();
     }
   }
 
@@ -467,6 +516,25 @@ void emit_verilog(block& blk) {
   }
 
   out << "module " << blk.name << "(" << comma_list(pts) << ");" << endl;
+  out << endl;
+
+  for (auto instr : blk.all_instrs()) {
+    if (instr->has_output()) {
+      out << tab(1) << instr->output_port().system_verilog_type_string()
+        << " " << instr->get_name() << ";" << endl;
+    }
+  }
+
+  out << endl;
+  for (int i = 0; i < blk.arch.sched.num_stages(); i++) {
+    out << tab(1) << "logic " << blk.stage_active_var(i) << ";" << endl;
+  }
+  out << endl;
+
+  out << tab(1) << "assign " << blk.stage_active_var(0) << " = start;" << endl;
+  out << tab(1) << "assign done = " << blk.stage_active_var(blk.arch.sched.num_stages() - 1) << ";" << endl;
+  out << endl;
+
   for (auto m : blk.instance_set()) {
     if (m->is_internal()) {
       out << tab(1) << "// " << m->get_name() << endl;
@@ -476,11 +544,20 @@ void emit_verilog(block& blk) {
     for (auto bound_instr : blk.bound_instrs(m)) {
       out << tab(2) << "// " << bound_instr->get_name() << endl;
       auto binding = bound_instr->get_binding();
+      if (binding->output_wire != "") {
+        out << tab(1) << "assign " << bound_instr->get_name() << " = " << bound_instr->get_unit()->get_name() << "_" << binding->output_wire << ";" << endl;
+      }
       for (auto b : binding->arg_map) {
-        out << tab(3) << b.first << " -> " << b.second << endl;
+        out << tab(1) << "assign "
+          << bound_instr->get_unit()->get_name() << "_" << b.second
+          << " = "
+          << blk.arch.wire_at(blk.arch.sched.start_times[bound_instr], bound_instr->operands.at(b.first))
+          << ";" << endl;
       }
     }
   }
+
+  out << endl;
   out << "endmodule" << endl;
   out.close();
 }
