@@ -105,11 +105,12 @@ instr* wire_read(block& blk, const string& arg_name, int width) {
 
 TEST_CASE("Create program") {
   block blk;
+  blk.name = "wire_blk";
 
   auto rdin = wire_read(blk, "val_in", 32);
   auto wrout = wire_write(blk, "val_out", 32, rdin);
 
-  blk.asap_schedule();
+  compile(blk);
 }
 
 

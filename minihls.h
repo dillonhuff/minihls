@@ -60,6 +60,8 @@ class block {
 
   public:
 
+  string name;
+
   block() : un(0) {}
 
   std::string unique_name(const string& pre) {
@@ -161,4 +163,28 @@ class block {
   }
 
 };
+
+static inline
+void asap_schedule(block& blk) {
+}
+
+static inline
+void finish_binding(block& blk) {
+}
+
+static inline
+void emit_verilog(block& blk) {
+
+  ofstream out(blk.name + ".v");
+  out << "module " << blk.name << "();" << endl;
+  out << "endmodule" << endl;
+  out.close();
+}
+
+static inline
+void compile(block& blk) {
+  finish_binding(blk);
+  asap_schedule(blk);
+  emit_verilog(blk);
+}
 
