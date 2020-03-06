@@ -21,13 +21,28 @@ class Port {
     int width;
     bool is_in;
 
+    string system_verilog_type_string() const {
+      return "logic [" + to_string(width - 1) + ":0]";
+    }
+
     string get_name() {
       return name;
     }
 };
 
-class module_type {
+Port outpt(const string& s, const int w) {
+  return {s, w, false};
+}
 
+Port inpt(const string& s, const int w) {
+  return {s, w, true};
+}
+
+class module_type {
+  public:
+
+    string name;
+    vector<Port> ports;
 };
 
 class module_instance {
@@ -39,7 +54,7 @@ class module_instance {
     bool internal;
 
     vector<Port> ports() const {
-      return {};
+      return tp->ports;
     }
 
     string get_name() const {
@@ -180,8 +195,10 @@ class block {
     return contains_key(name, instruction_types);
   }
 
-  module_type* add_module_type(const std::string& name) {
+  module_type* add_module_type(const std::string& name, const vector<Port>& pts) {
     auto inst = new module_type();
+    inst->name = name;
+    inst->ports = pts;
     module_types[name] = inst;
     return inst;
   }
@@ -197,6 +214,8 @@ class block {
 
   module_instance* add_external_inst(const std::string& name, module_type* tp) {
     auto inst = new module_instance();
+    inst->name = name;
+    inst->tp = tp;
     inst->internal = false;
     instances[name] = inst;
     return inst;
@@ -204,6 +223,8 @@ class block {
 
   module_instance* add_inst(const std::string& name, module_type* tp) {
     auto inst = new module_instance();
+    inst->name = name;
+    inst->tp = tp;
     inst->name = name;
     inst->internal = true;
     instances[name] = inst;
@@ -266,11 +287,11 @@ std::string comma_list(const std::vector<std::string>& strs) {
 static inline
 void emit_verilog(block& blk) {
   ofstream out(blk.name + ".v");
-  vector<string> pts{"input clk", "input rst"};
+  vector<string> pts{"input clk", "input rst", "input start", "output done"};
   for (auto m : blk.instance_set()) {
     if (m->is_external()) {
       for (auto pt : m->ports()) {
-        pts.push_back(m->get_name() + "_" + pt.get_name());
+        pts.push_back(pt.system_verilog_type_string() + " " + m->get_name() + "_" + pt.get_name());
       }
     }
   }

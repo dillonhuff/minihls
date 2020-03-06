@@ -20,7 +20,8 @@ module_type* wire_type(block& blk, const int width) {
     return blk.get_module_type(name);
   }
 
-  return blk.add_module_type(name);
+  vector<Port> pts{inpt("in", width), outpt("out", width)};
+  return blk.add_module_type(name, pts);
 }
 
 module_instance* get_wire(block& blk, const string& name, int width) {
