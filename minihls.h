@@ -6,6 +6,25 @@
 using namespace dbhc;
 using namespace std;
 
+std::string tab(const int i) {
+  string s = "";
+  for (int k = 0; k < i; k++) {
+    s += "  ";
+  }
+  return s;
+}
+
+class Port {
+  public:
+
+    string name;
+    int width;
+    bool is_in;
+
+    string get_name() {
+      return name;
+    }
+};
 
 class module_type {
 
@@ -13,6 +32,27 @@ class module_type {
 
 class module_instance {
 
+  public:
+
+    string name;
+    module_type* tp;
+    bool internal;
+
+    vector<Port> ports() const {
+      return {};
+    }
+
+    string get_name() const {
+      return name;
+    }
+
+    bool is_internal() const {
+      return internal;
+    }
+
+    bool is_external() const {
+      return !internal;
+    }
 };
 
 class instruction_type {
@@ -68,6 +108,14 @@ class block {
     int n = un;
     un++;
     return pre + "_" + to_string(n);
+  }
+
+  set<module_instance*> instance_set() {
+    set<module_instance*> insts;
+    for (auto i : instances) {
+      insts.insert(i.second);
+    }
+    return insts;
   }
 
   void asap_schedule() {
@@ -147,8 +195,17 @@ class block {
     return contains_key(name, module_types);
   }
 
+  module_instance* add_external_inst(const std::string& name, module_type* tp) {
+    auto inst = new module_instance();
+    inst->internal = false;
+    instances[name] = inst;
+    return inst;
+  }
+
   module_instance* add_inst(const std::string& name, module_type* tp) {
     auto inst = new module_instance();
+    inst->name = name;
+    inst->internal = true;
     instances[name] = inst;
     return inst;
   }
@@ -173,10 +230,57 @@ void finish_binding(block& blk) {
 }
 
 static inline
-void emit_verilog(block& blk) {
+std::string sep_list(const std::vector<std::string>& strs, const std::string& ldelim, const std::string& rdelim, const std::string& sep) {
+  string res = ldelim;
 
+  if (strs.size() > 0) {
+    for (size_t i = 0; i < strs.size(); i++) {
+      res += strs[i];
+      if (strs.size() > 1 && i < strs.size() - 1) {
+        res += sep;
+      }
+    }
+  }
+  res += rdelim;
+
+  return res;
+}
+
+template<typename T>
+static inline
+std::string sep_list(const std::vector<T>& vals, const std::string& ldelim, const std::string& rdelim, const std::string& sep) {
+  vector<string> strs;
+  for (auto v : vals) {
+    ostringstream ss;
+    ss << v;
+    strs.push_back(ss.str());
+  }
+  return sep_list(vals, ldelim, rdelim, sep);
+}
+
+static inline
+std::string comma_list(const std::vector<std::string>& strs) {
+  return sep_list(strs, "", "", ", ");
+}
+
+static inline
+void emit_verilog(block& blk) {
   ofstream out(blk.name + ".v");
-  out << "module " << blk.name << "();" << endl;
+  vector<string> pts{"input clk", "input rst"};
+  for (auto m : blk.instance_set()) {
+    if (m->is_external()) {
+      for (auto pt : m->ports()) {
+        pts.push_back(m->get_name() + "_" + pt.get_name());
+      }
+    }
+  }
+
+  out << "module " << blk.name << "(" << comma_list(pts) << ");" << endl;
+  for (auto m : blk.instance_set()) {
+    if (m->is_internal()) {
+      out << tab(1) << "// " << m->get_name() << endl;
+    }
+  }
   out << "endmodule" << endl;
   out.close();
 }

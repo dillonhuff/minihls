@@ -30,7 +30,7 @@ module_instance* get_wire(block& blk, const string& name, int width) {
 
   module_type* wtp = wire_type(blk, width);
 
-  return blk.add_inst(name, wtp);
+  return blk.add_external_inst(name, wtp);
 }
 
 instruction_binding* rd_wire_binding(block& blk, int width) {
