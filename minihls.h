@@ -6,6 +6,8 @@
 using namespace dbhc;
 using namespace std;
 
+#define INT_INF 999999
+
 std::string tab(const int i) {
   string s = "";
   for (int k = 0; k < i; k++) {
@@ -81,8 +83,13 @@ class instruction_binding {
 class instruction_instance {
   
   public:
-
+    string name;
     vector<instruction_instance*> operands;
+
+    string get_name() const {
+      return name;
+    }
+
 
     void bind_unit(module_instance* unit) {
 
@@ -103,6 +110,53 @@ class schedule {
   map<instr*, int> end_times;
 
 };
+
+template<typename N, typename E>
+class DirectedGraph {
+  public:
+    map<N, set<pair<N, E > > > out_edges;
+
+    set<pair<pair<N, N>, E> > edges() const {
+      set<pair<pair<N, N>, E> > es;
+
+      for (auto edge_set : out_edges) {
+        for (auto e : edge_set.second) {
+          es.insert({{edge_set.first, e.first}, e.second});
+        }
+      }
+      return es;
+    }
+
+    set<N> vertices() const {
+      set<N> verts;
+      for (auto e : out_edges) {
+        verts.insert(e.first);
+      }
+      return verts;
+    }
+
+    void add_edge(const N& a, const N& b, const E& v) {
+      out_edges[a].insert({b, v});
+    }
+
+    void add_node(const N& v) {
+      out_edges[v] = {};
+    }
+};
+
+template<typename N, typename E>
+void diff_eq(DirectedGraph<N, E>& g, const N& a, const N& b, const E& v) {
+  g.add_edge(a, b, v);
+  g.add_edge(a, b, -v);
+}
+
+string endstr(instr* i) {
+  return "$end_" + i->get_name();
+}
+
+string startstr(instr* i) {
+  return "$start_" + i->get_name();
+}
 
 class block {
 
@@ -133,18 +187,61 @@ class block {
     return insts;
   }
 
+  // Primitive difference logic solver. For details see:
+  // https://www.cs.upc.edu/~erodri/webpage/cps/theory/sat/SMT-DL/slides.pdf
   void asap_schedule() {
+    cout << "Scheduling" << endl;
 
-    //schedule sched;
+    DirectedGraph<string, int> constraints;
+    constraints.add_node("$base");
+    for (pair<string, instr*> instr : instrs) {
+      cout << "Adding instruction to graph" << endl;
+      auto i = instr.second;
+      constraints.add_node(startstr(i));
+      constraints.add_node(endstr(i));
 
-    //set<instr*> active;
-    //set<instr*> done;    
+      constraints.add_edge("$base", startstr(i), 0);
+      constraints.add_edge("$base", endstr(i), 0);
 
-    //int time = 0;
-    //while (done.size() < instrs.size()) {
+      // Assume latency 0 for now
+      diff_eq(constraints, startstr(i), endstr(i), 1);
+    }
 
-    //}
+    map<string, int> distance;
+    map<string, string> predecessor;
+    for (auto v : constraints.vertices()) {
+      distance[v] = INT_INF;
+      predecessor[v] = "";
+    }
+    distance["$base"] = 0;
 
+    for (int i = 1; i < constraints.vertices().size(); i++) {
+      for (auto e : constraints.edges()) {
+        auto u = e.first.first;
+        auto v = e.first.second;
+        auto w = e.second;
+        if (distance[u] + w < distance[v]) {
+          distance[v] = distance[u] + w;
+          predecessor[v] = u;
+        }
+      }
+    }
+
+    for (auto v : constraints.vertices()) {
+      cout << tab(1) << v << " -> " << distance[v] << endl;
+    }
+
+    for (auto e : constraints.edges()) {
+      auto u = e.first.first;
+      auto v = e.first.second;
+      auto w = e.second;
+      if (distance[u] + w < distance[v]) {
+        cout << "Error: Graph contains a negative weight cycle with: " << u << ", and " << v << endl;
+        assert(false);
+      }
+    }
+
+    schedule sched;
     cout << "Done with scheduling" << endl;
   }
 
@@ -159,6 +256,7 @@ class block {
     assert(!contains_key(name, instrs));
 
     auto instr = new instruction_instance();
+    instr->name = name;
     instr->operands = args;
     instrs[name] = instr;
 
@@ -244,6 +342,7 @@ class block {
 
 static inline
 void asap_schedule(block& blk) {
+  blk.asap_schedule();
 }
 
 static inline
