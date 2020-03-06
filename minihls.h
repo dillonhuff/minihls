@@ -214,6 +214,15 @@ class block {
       diff_eq(constraints, startstr(i), endstr(i), 1);
       //constraints.add_edge(endstr(i), startstr(i), 0);
     }
+    
+    for (pair<string, instr*> instr : instrs) {
+      for (auto op : instr.second->operands) {
+        diff_lte(constraints,
+            endstr(op),
+            startstr(instr.second),
+            0);
+      }
+    }
 
     map<string, int> distance;
     map<string, string> predecessor;
@@ -235,8 +244,12 @@ class block {
       }
     }
 
+    int min_distance = INT_INF;
     for (auto v : constraints.vertices()) {
       cout << tab(1) << v << " -> " << distance[v] << endl;
+      if (distance[v] < min_distance) {
+        min_distance = distance[v];
+      }
     }
 
     for (auto e : constraints.edges()) {
@@ -249,8 +262,20 @@ class block {
       }
     }
 
+    int shift = -min_distance;
     schedule sched;
+    for (auto instr : instrs) {
+      auto i = instr.second;
+      sched.start_times[i] = distance[startstr(i)] + shift;
+      sched.end_times[i] = distance[endstr(i)] + shift;
+    }
+
     cout << "Done with scheduling" << endl;
+    for (auto instrP : instrs) {
+      auto instr = instrP.second;
+      cout << "Start of " << startstr(instr) << " -> " << sched.start_times[instr] << endl;
+      cout << "End of " << startstr(instr) << " -> " << sched.end_times[instr] << endl;
+    }
   }
 
   instr* add_instr(const std::string& name, instruction_type* tp) {
