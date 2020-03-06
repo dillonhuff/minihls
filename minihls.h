@@ -103,12 +103,16 @@ class instruction_instance {
 typedef instruction_instance instr;
 
 class schedule {
-
   public:
+    map<instr*, int> start_times;
+    map<instr*, int> end_times;
+};
 
-  map<instr*, int> start_times;
-  map<instr*, int> end_times;
-
+class micro_architecture {
+  public:
+    schedule sched;
+    map<instr*, map<int, string> > source_registers;
+    map<instr*, map<int, string> > source_wires;
 };
 
 template<typename N, typename E>
