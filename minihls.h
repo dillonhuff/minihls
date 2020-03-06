@@ -84,6 +84,7 @@ class instruction_instance {
   
   public:
     string name;
+    module_instance* unit;
     vector<instruction_instance*> operands;
 
     string get_name() const {
@@ -91,8 +92,12 @@ class instruction_instance {
     }
 
 
-    void bind_unit(module_instance* unit) {
+    module_instance* get_unit() const {
+      return unit;
+    }
 
+    void bind_unit(module_instance* u) {
+      unit = u;
     }
 
     void bind_procedure(instruction_binding* p) {
@@ -181,6 +186,16 @@ class block {
   string name;
 
   block() : un(0) {}
+
+  set<instr*> bound_instrs(module_instance* inst) {
+    set<instr*> bnd;
+    for (auto instr : instrs) {
+      if (instr.second->get_unit() == inst) {
+        bnd.insert(instr.second);
+      }
+    }
+    return bnd;
+  }
 
   std::string unique_name(const string& pre) {
     int n = un;
@@ -433,6 +448,11 @@ void emit_verilog(block& blk) {
   for (auto m : blk.instance_set()) {
     if (m->is_internal()) {
       out << tab(1) << "// " << m->get_name() << endl;
+    }
+
+    out << tab(1) << "// Bindings to " << m->get_name() << endl;
+    for (auto bound_instr : blk.bound_instrs(m)) {
+      out << tab(2) << "// " << bound_instr->get_name() << endl;
     }
   }
   out << "endmodule" << endl;
