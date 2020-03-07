@@ -50,6 +50,27 @@ module_type* wire_type(block& blk, const int width) {
   return blk.add_module_type(name, pts);
 }
 
+module_type* constant_type(block& blk, const int value, const int width) {
+  string name = "const_" + to_string(value) + "_" + to_string(width);
+  if (blk.has_module_type(name)) {
+    return blk.get_module_type(name);
+  }
+
+  vector<Port> pts{outpt("out", width)};
+  return blk.add_module_type(name, pts);
+}
+
+module_instance* get_constant(block& blk, const int value, int width) {
+  string name = "val_" + to_string(value) + "_" + to_string(width);
+  if (blk.has_inst(name)) {
+    return blk.get_inst(name);
+  }
+
+  module_type* wtp = constant_type(blk, value, width);
+
+  return blk.add_inst(name, wtp);
+}
+
 module_instance* get_wire(block& blk, const string& name, int width) {
   if (blk.has_inst(name)) {
     return blk.get_inst(name);
@@ -58,6 +79,15 @@ module_instance* get_wire(block& blk, const string& name, int width) {
   module_type* wtp = wire_type(blk, width);
 
   return blk.add_external_inst(name, wtp);
+}
+
+instruction_type* constant_instr(block& blk, const int value, int width) {
+  string name = "constant_instr_" + to_string(value) + "_" + to_string(width);
+  if (blk.has_instruction_type(name)) {
+    return blk.get_instruction_type(name);
+  }
+
+  return blk.add_instruction_type(name);
 }
 
 instruction_type* float_add_l2_instr(block& blk, int width) {
@@ -76,6 +106,17 @@ instruction_type* uadd_instr(block& blk, int width) {
   }
 
   return blk.add_instruction_type(name);
+}
+
+instruction_binding* constant_binding(block& blk, const int value, int width) {
+  string name = "constant_binding_" + to_string(value) + "_" + to_string(width);
+  if (blk.has_instruction_binding(name)) {
+    return blk.get_instruction_binding(name);
+  }
+
+  return blk.add_instruction_binding(name,
+      constant_instr(blk, value, width),
+      constant_type(blk, value, width), "out", {});
 }
 
 instruction_binding* uadd_binding(block& blk, int width) {
@@ -179,6 +220,24 @@ instr* float_add_l2(block& blk, const string& arg_name, int width, const vector<
   return instr;
 
 }
+
+instr* constant(block& blk, const int value, int width) {
+  module_instance* arg_wire =
+    get_constant(blk, value, width);
+
+  instruction_binding* rd_wire = 
+    constant_binding(blk, value, width);
+
+  instruction_type* instr_tp =
+    constant_instr(blk, value, width);
+
+  auto instr = blk.add_instr(blk.unique_name("const_" + to_string(value)), instr_tp);
+  instr->bind_procedure(rd_wire);
+  instr->bind_unit(arg_wire);
+
+  return instr;
+}
+
 instr* wire_read(block& blk, const string& arg_name, int width) {
   module_instance* arg_wire =
     get_wire(blk, arg_name, width);
@@ -233,6 +292,20 @@ TEST_CASE("op with latency") {
 
   compile(blk);
 
-
   REQUIRE(blk.arch.sched.num_stages() == 3);
+}
+
+TEST_CASE("phi node") {
+  block blk;
+  blk.name = "phi_test";
+
+  auto one = constant(blk, 1, 32);
+  auto i = phi_node(blk, "i", 32, one);
+  auto next_i = uadd(blk, "next_i", 32, {i, one});
+  i->operands.push_back(next_i);
+  auto wrout = wire_write(blk, "c", 32, i);
+
+  compile(blk);
+
+  REQUIRE(blk.arch.sched.num_stages() == 1);
 }
