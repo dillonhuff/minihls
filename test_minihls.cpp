@@ -27,6 +27,20 @@ module_type* float_add_l2_type(block& blk, const int width) {
   return blk.add_module_type(name, pts);
 }
 
+module_type* phi_type(block& blk, const int width) {
+  string name = "phi_" + to_string(width);
+  if (blk.has_module_type(name)) {
+    return blk.get_module_type(name);
+  }
+
+  vector<Port> pts{inpt("init_val", width),
+    inpt("next_val", width),
+    inpt("is_iter_0", 1),
+    outpt("out", width)};
+
+  return blk.add_module_type(name, pts);
+}
+
 module_type* uadd_type(block& blk, const int width) {
   string name = "uadd_" + to_string(width);
   if (blk.has_module_type(name)) {
@@ -99,6 +113,15 @@ instruction_type* float_add_l2_instr(block& blk, int width) {
   return blk.add_instruction_type(name);
 }
 
+instruction_type* phi_instr(block& blk, int width) {
+  string name = "phi_instr_" + to_string(width);
+  if (blk.has_instruction_type(name)) {
+    return blk.get_instruction_type(name);
+  }
+
+  return blk.add_instruction_type(name);
+}
+
 instruction_type* uadd_instr(block& blk, int width) {
   string name = "uadd_instr_" + to_string(width);
   if (blk.has_instruction_type(name)) {
@@ -117,6 +140,15 @@ instruction_binding* constant_binding(block& blk, const int value, int width) {
   return blk.add_instruction_binding(name,
       constant_instr(blk, value, width),
       constant_type(blk, value, width), "out", {});
+}
+
+instruction_binding* phi_binding(block& blk, int width) {
+  string name = "phi_binding_" + to_string(width);
+  if (blk.has_instruction_binding(name)) {
+    return blk.get_instruction_binding(name);
+  }
+
+  return blk.add_instruction_binding(name, phi_instr(blk, width), phi_type(blk, width), "out", {{0, "init_val"}, {1, "next_val"}});
 }
 
 instruction_binding* uadd_binding(block& blk, int width) {
@@ -193,6 +225,19 @@ instr* wire_write(block& blk, const string& arg_name, int width, instr* arg) {
   instr->bind_unit(arg_wire);
 
   return instr;
+}
+
+instr* phi_node(block& blk, const string& arg_name, int width, instr* args) {
+  instruction_binding* add_val = 
+    phi_binding(blk, width);
+
+  instruction_type* instr_tp =
+    phi_instr(blk, width);
+
+  auto instr = blk.add_instr(blk.unique_name(arg_name), instr_tp, {args});
+
+  return instr;
+
 }
 
 instr* uadd(block& blk, const string& arg_name, int width, const vector<instr*>& args) {
@@ -299,8 +344,9 @@ TEST_CASE("phi node") {
   block blk;
   blk.name = "phi_test";
 
+  auto zero = constant(blk, 0, 32);
   auto one = constant(blk, 1, 32);
-  auto i = phi_node(blk, "i", 32, one);
+  auto i = phi_node(blk, "i", 32, zero);
   auto next_i = uadd(blk, "next_i", 32, {i, one});
   i->operands.push_back(next_i);
   auto wrout = wire_write(blk, "c", 32, i);

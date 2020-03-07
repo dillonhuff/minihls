@@ -8,6 +8,16 @@ using namespace std;
 
 #define INT_INF 999999
 
+static inline
+bool
+is_prefix( std::string const& lhs, std::string const& rhs )
+{
+    return std::equal(
+        lhs.begin(),
+        lhs.begin() + std::min( lhs.size(), rhs.size() ),
+        rhs.begin() );
+}
+
 std::string tab(const int i) {
   string s = "";
   for (int k = 0; k < i; k++) {
@@ -274,6 +284,7 @@ string startstr(instr* i) {
 class block {
 
   int un;
+  vector<instr*> instr_list;
   map<string, instr*> instrs;
   map<string, module_instance*> instances;
   map<string, module_type*> module_types;
@@ -301,6 +312,10 @@ class block {
       allis.insert(i.second);
     }
     return allis;
+  }
+
+  string is_iter_0_wire(const int i) const {
+    return "stage_" + to_string(i) + "_at_iter_0";
   }
 
   string stage_active_var(const int i) const {
@@ -440,8 +455,11 @@ class block {
     instr->binding = nullptr;
     instr->name = name;
     instr->operands = args;
-    instrs[name] = instr;
     instr->tp = tp;
+
+    instrs[name] = instr;
+
+    instr_list.push_back(instr);
 
     return instr;
   }
@@ -569,6 +587,9 @@ void finish_binding(block& blk) {
         }
       }
 
+      if (!bound) {
+        cout << "Error: No binding for " << instr->get_name() << endl;
+      }
       assert(bound);
     }
   }
@@ -631,23 +652,34 @@ void emit_verilog(block& blk) {
   }
 
   out << endl;
+  out << tab(1) << "logic started;" << endl << endl;
   for (int i = 0; i < blk.arch.sched.num_stages(); i++) {
     out << tab(1) << "logic " << blk.stage_active_var(i) << ";" << endl;
   }
   out << endl;
+  for (int i = 0; i < blk.arch.sched.num_stages(); i++) {
+    out << tab(1) << "logic " << blk.is_iter_0_wire(i) << ";" << endl;
+  }
+  out << endl;
 
-  out << tab(1) << "assign " << blk.stage_active_var(0) << " = start | " << blk.stage_active_var(1) << ";" << endl;
+  out << tab(1) << "assign " << blk.stage_active_var(0) << " = start | started;" << endl;
+  out << tab(1) << "assign " << blk.is_iter_0_wire(0) << " = start;" << endl;
   out << tab(1) << "assign done = " << blk.stage_active_var(blk.arch.sched.num_stages() - 1) << ";" << endl;
   out << endl;
 
   out << tab(1) << "always @(posedge clk) begin" << endl;
   out << tab(2) << "if (rst) begin" << endl;
+  out << tab(3) << "started <= 0;" << endl;
   for (int i = 1; i < blk.arch.sched.num_stages(); i++) {
     out << tab(3) << blk.stage_active_var(i) << " <= 0;" << endl;
   }
-  out << tab(2) << "end else begin" << endl;
+  out << tab(2) << "end else begin" << endl << endl;
+  out << tab(3) << "if (start) begin" << endl;
+  out << tab(4) << "started <= 1;" << endl;
+  out << tab(3) << "end" << endl << endl;
   for (int i = 1; i < blk.arch.sched.num_stages(); i++) {
     out << tab(3) << blk.stage_active_var(i) << " <= " << blk.stage_active_var(i - 1) << ";" << endl;
+    out << tab(3) << blk.is_iter_0_wire(i) << " <= " << blk.is_iter_0_wire(i - 1) << ";" << endl;
   }
   out << tab(2) << "end" << endl;
   out << tab(1) << "end" << endl;
@@ -685,7 +717,19 @@ void emit_verilog(block& blk) {
           << blk.arch.wire_at(blk.arch.sched.start_times[bound_instr], bound_instr->operands.at(b.first))
           << ";" << endl;
       }
+
+      if (is_prefix("phi_", m->get_type()->get_name())) {
+        int start_time =
+          blk.arch.sched.start_times[bound_instr];
+
+        out << tab(1) << "assign "
+          << m->get_name() << "_is_iter_0"
+          << " = "
+          << blk.is_iter_0_wire(start_time)
+          << ";" << endl;
+      }
     }
+
 
     out << endl;
   }
