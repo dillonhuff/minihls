@@ -6,14 +6,6 @@
 
 using namespace std;
 
-module_type wire_mod(const int w) {
-  return module_type();
-}
-
-instruction_type wire_read(const int w) {
-  return instruction_type();
-}
-
 module_type* float_add_l2_type(block& blk, const int width) {
   string name = "float_add_l2_" + to_string(width);
   if (blk.has_module_type(name)) {
@@ -38,7 +30,9 @@ module_type* phi_type(block& blk, const int width) {
     inpt("is_iter_0", 1),
     outpt("out", width)};
 
-  return blk.add_module_type(name, pts);
+  string body = tab(1) + "assign out = is_iter_0 ? init_val : next_val;";
+
+  return blk.add_module_type(name, pts, body);
 }
 
 module_type* uadd_type(block& blk, const int width) {
@@ -51,7 +45,8 @@ module_type* uadd_type(block& blk, const int width) {
     inpt("in1", width),
     outpt("out", width)};
 
-  return blk.add_module_type(name, pts);
+  string body = tab(1) + "assign out = in0 + in1;";
+  return blk.add_module_type(name, pts, body);
 }
 
 module_type* wire_type(block& blk, const int width) {
@@ -61,7 +56,8 @@ module_type* wire_type(block& blk, const int width) {
   }
 
   vector<Port> pts{inpt("in", width), outpt("out", width)};
-  return blk.add_module_type(name, pts);
+  string body = tab(1) + "assign out = in;";
+  return blk.add_module_type(name, pts, body);
 }
 
 module_type* constant_type(block& blk, const int value, const int width) {
@@ -71,7 +67,8 @@ module_type* constant_type(block& blk, const int value, const int width) {
   }
 
   vector<Port> pts{outpt("out", width)};
-  return blk.add_module_type(name, pts);
+  string body = tab(1) + "assign out = " + to_string(width) + "'d" + to_string(value) + ";";
+  return blk.add_module_type(name, pts, body);
 }
 
 module_instance* get_constant(block& blk, const int value, int width) {
@@ -354,4 +351,7 @@ TEST_CASE("phi node") {
   compile(blk);
 
   REQUIRE(blk.arch.sched.num_stages() == 1);
+  int res = 
+    system("verilator --cc phi_test.v phi_test_techlib.v --top-module phi_test");
+  REQUIRE(res == 0);
 }

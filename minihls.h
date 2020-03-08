@@ -93,6 +93,7 @@ class module_type {
 
     string name;
     vector<Port> ports;
+    string body;
 
     string get_name() const { return name; }
 
@@ -103,6 +104,7 @@ class module_type {
         strs.push_back(pt.system_verilog_decl_string() + " " + pt.get_name());
       }
       ss << "module " << name << "(" << comma_list(strs) << ");" << endl;
+      ss << body << endl;
       ss << "endmodule" << endl;
       return ss.str();
     }
@@ -573,9 +575,14 @@ class block {
   }
 
   module_type* add_module_type(const std::string& name, const vector<Port>& pts) {
+    return add_module_type(name, pts, "");
+  }
+
+  module_type* add_module_type(const std::string& name, const vector<Port>& pts, const std::string& body) {
     auto inst = new module_type();
     inst->name = name;
     inst->ports = pts;
+    inst->body = body;
     module_types[name] = inst;
     return inst;
   }
