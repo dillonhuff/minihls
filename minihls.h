@@ -9,6 +9,40 @@ using namespace std;
 #define INT_INF 999999
 
 static inline
+std::string sep_list(const std::vector<std::string>& strs, const std::string& ldelim, const std::string& rdelim, const std::string& sep) {
+  string res = ldelim;
+
+  if (strs.size() > 0) {
+    for (size_t i = 0; i < strs.size(); i++) {
+      res += strs[i];
+      if (strs.size() > 1 && i < strs.size() - 1) {
+        res += sep;
+      }
+    }
+  }
+  res += rdelim;
+
+  return res;
+}
+
+template<typename T>
+static inline
+std::string sep_list(const std::vector<T>& vals, const std::string& ldelim, const std::string& rdelim, const std::string& sep) {
+  vector<string> strs;
+  for (auto v : vals) {
+    ostringstream ss;
+    ss << v;
+    strs.push_back(ss.str());
+  }
+  return sep_list(vals, ldelim, rdelim, sep);
+}
+
+static inline
+std::string comma_list(const std::vector<std::string>& strs) {
+  return sep_list(strs, "", "", ", ");
+}
+
+static inline
 bool
 is_prefix( std::string const& lhs, std::string const& rhs )
 {
@@ -32,6 +66,10 @@ class Port {
     string name;
     int width;
     bool is_in;
+    
+    string system_verilog_decl_string() const {
+      return string(is_in ? "input" : "output") + " [" + to_string(width - 1) + ":0]";
+    }
 
     string system_verilog_type_string() const {
       return "logic [" + to_string(width - 1) + ":0]";
@@ -57,6 +95,17 @@ class module_type {
     vector<Port> ports;
 
     string get_name() const { return name; }
+
+    string verilog_decl_string() const {
+      ostringstream ss;
+      vector<string> strs;
+      for (auto pt : ports) {
+        strs.push_back(pt.system_verilog_decl_string() + " " + pt.get_name());
+      }
+      ss << "module " << name << "(" << comma_list(strs) << ");" << endl;
+      ss << "endmodule" << endl;
+      return ss.str();
+    }
 };
 
 class module_instance {
@@ -515,6 +564,14 @@ class block {
     return contains_key(name, instruction_types);
   }
 
+  set<module_type*> module_type_set() const {
+    set<module_type*> ms;
+    for (auto mt : module_types) {
+      ms.insert(mt.second);
+    }
+    return ms;
+  }
+
   module_type* add_module_type(const std::string& name, const vector<Port>& pts) {
     auto inst = new module_type();
     inst->name = name;
@@ -593,40 +650,6 @@ void finish_binding(block& blk) {
       assert(bound);
     }
   }
-}
-
-static inline
-std::string sep_list(const std::vector<std::string>& strs, const std::string& ldelim, const std::string& rdelim, const std::string& sep) {
-  string res = ldelim;
-
-  if (strs.size() > 0) {
-    for (size_t i = 0; i < strs.size(); i++) {
-      res += strs[i];
-      if (strs.size() > 1 && i < strs.size() - 1) {
-        res += sep;
-      }
-    }
-  }
-  res += rdelim;
-
-  return res;
-}
-
-template<typename T>
-static inline
-std::string sep_list(const std::vector<T>& vals, const std::string& ldelim, const std::string& rdelim, const std::string& sep) {
-  vector<string> strs;
-  for (auto v : vals) {
-    ostringstream ss;
-    ss << v;
-    strs.push_back(ss.str());
-  }
-  return sep_list(vals, ldelim, rdelim, sep);
-}
-
-static inline
-std::string comma_list(const std::vector<std::string>& strs) {
-  return sep_list(strs, "", "", ", ");
 }
 
 static inline
@@ -740,9 +763,19 @@ void emit_verilog(block& blk) {
 }
 
 static inline
+void emit_techlib(block& blk) {
+  ofstream out(blk.name + "_techlib.v");
+  for (auto m : blk.module_type_set()) {
+    out << m->verilog_decl_string() << endl << endl;
+  }
+  out << endl;
+}
+
+static inline
 void compile(block& blk) {
   finish_binding(blk);
   asap_schedule(blk);
   emit_verilog(blk);
+  emit_techlib(blk);
 }
 
