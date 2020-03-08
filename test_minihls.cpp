@@ -308,7 +308,6 @@ TEST_CASE("Create program") {
   REQUIRE(blk.arch.sched.num_stages() == 1);
 }
 
-
 TEST_CASE("One addition") {
   block blk;
   blk.name = "adder";

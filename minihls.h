@@ -66,7 +66,7 @@ class Port {
     string name;
     int width;
     bool is_in;
-    
+
     string system_verilog_decl_string() const {
       return string(is_in ? "input" : "output") + " [" + to_string(width - 1) + ":0]";
     }
@@ -94,6 +94,17 @@ class module_type {
     string name;
     vector<Port> ports;
     string body;
+
+    Port get_port(const std::string& pname) const {
+      for (auto p : ports) {
+        if (p.name == pname) {
+          return p;
+        }
+      }
+      cout << "Error: No port named: " << pname << " in " << name << endl;
+      assert(false);
+      return {};
+    }
 
     string get_name() const { return name; }
 
@@ -230,6 +241,7 @@ typedef instruction_instance instr;
 
 class schedule {
   public:
+    int II;
     map<instr*, int> start_times;
     map<instr*, int> end_times;
 
@@ -349,6 +361,33 @@ class block {
 
   block() : un(0) {}
 
+  bool lexically_later_than(instr* a, instr* b) {
+    for (auto instr : instr_list) {
+      if (instr == b) {
+        break;
+      }
+
+      if (instr == a) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  string wire_at(instr* location, instr* v) {
+    if (lexically_later_than(v, location)) {
+      return arch.wire_at(arch.sched.start_times[location], v);
+    }
+
+    //int read_stage = arch.sched.start_times[location];
+    int source_stage = arch.sched.end_times[v];
+
+    return arch.source_wires[v][source_stage + arch.sched.II];
+
+    cout << "Error: " << v->get_name() << " is lexically before " << location->get_name() << endl;
+    assert(false);
+  }
+
   set<instruction_binding*> all_bindings() const {
     set<instruction_binding*> bs;
     for (auto b : instruction_bindings) {
@@ -465,6 +504,7 @@ class block {
 
     int shift = -min_distance;
     schedule sched;
+    sched.II = 1;
     for (auto instr : instrs) {
       auto i = instr.second;
       sched.start_times[i] = distance[startstr(i)] + shift;
@@ -485,8 +525,8 @@ class block {
       if (instr->has_output()) {
         arch.source_wires[instr][arch.sched.end_times[instr]] =
           instr->get_name();
-        for (int s = arch.sched.end_times[instr] + 1; s < arch.sched.last_use_time(instr); s++) {
-          arch.source_wires[instr][s] = instr->get_name() + "_out";
+        for (int s = arch.sched.end_times[instr] + 1; s <= arch.sched.num_stages(); s++) {
+          arch.source_wires[instr][s] = instr->get_name() + "_stage_" + to_string(s);
         }
       }
     }
@@ -697,6 +737,20 @@ void emit_verilog(block& blk) {
   out << tab(1) << "assign done = " << blk.stage_active_var(blk.arch.sched.num_stages() - 1) << ";" << endl;
   out << endl;
 
+  out << tab(1) << "// Pipeline datapath registers..." << endl;
+  for (auto instr : blk.arch.source_wires) {
+    for (pair<int, string> time : instr.second) {
+      if (time.first > blk.arch.sched.end_times[instr.first]) {
+        string output =
+          instr.first->get_binding()->output_wire;
+        Port pt =
+          instr.first->get_unit()->get_port(output);
+        out << tab(1) << "reg [" << (pt.width - 1) << ":0]" << " " << time.second << ";" << endl;
+      }
+    }
+  }
+  out << endl << endl;
+
   out << tab(1) << "always @(posedge clk) begin" << endl;
   out << tab(2) << "if (rst) begin" << endl;
   out << tab(3) << "started <= 0;" << endl;
@@ -704,18 +758,37 @@ void emit_verilog(block& blk) {
     out << tab(3) << blk.stage_active_var(i) << " <= 0;" << endl;
   }
   out << tab(2) << "end else begin" << endl << endl;
+
   out << tab(3) << "if (start) begin" << endl;
   out << tab(4) << "started <= 1;" << endl;
   out << tab(3) << "end" << endl << endl;
+
   for (int i = 1; i < blk.arch.sched.num_stages(); i++) {
     out << tab(3) << blk.stage_active_var(i) << " <= " << blk.stage_active_var(i - 1) << ";" << endl;
     out << tab(3) << blk.is_iter_0_wire(i) << " <= " << blk.is_iter_0_wire(i - 1) << ";" << endl;
   }
-  out << tab(2) << "end" << endl;
+
+  for (auto instr : blk.arch.source_wires) {
+    vector<string> pipeline_sequence;
+    pipeline_sequence.resize(instr.second.size());
+
+    for (pair<int, string> time : instr.second) {
+      pipeline_sequence[time.first - blk.arch.sched.end_times[instr.first]] =
+        time.second;
+    }
+
+    for (int i = 1; i < pipeline_sequence.size(); i++) {
+      out << tab(3) << pipeline_sequence[i] << " <= " << pipeline_sequence[i - 1] << ";" << endl;
+    }
+  }
+
+  out << endl << endl;
+  out << tab(2) << "end" << endl << endl;
   out << tab(1) << "end" << endl;
 
   out << endl << endl;
 
+  out << tab(1) << "// Data processing units..." << endl;
   for (auto m : blk.instance_set()) {
     if (m->is_internal()) {
       out << tab(1) << "// " << m->get_name() << endl;
@@ -739,12 +812,11 @@ void emit_verilog(block& blk) {
         out << tab(1) << "assign " << bound_instr->get_name() << " = " << bound_instr->get_unit()->get_name() << "_" << binding->output_wire << ";" << endl;
       }
       for (auto b : binding->arg_map) {
-        cout << "Getting operand: " << b.first << " of " << bound_instr->get_name() << endl;
         assert(bound_instr->operands.size() >= b.first);
         out << tab(1) << "assign "
           << bound_instr->get_unit()->get_name() << "_" << b.second
           << " = "
-          << blk.arch.wire_at(blk.arch.sched.start_times[bound_instr], bound_instr->operands.at(b.first))
+          << blk.wire_at(bound_instr, bound_instr->operands.at(b.first))
           << ";" << endl;
       }
 
