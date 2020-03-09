@@ -354,3 +354,27 @@ TEST_CASE("phi node") {
     system("verilator --cc phi_test.v phi_test_techlib.v --top-module phi_test");
   REQUIRE(res == 0);
 }
+
+TEST_CASE("predicated operation") {
+  block blk;
+  blk.name = "ram_write";
+
+  auto ram = add_dual_port_ram(blk, 256, 8, 1);
+  auto zero = constant(blk, 0, 8);
+  auto one = constant(blk, 1, 8);
+
+  auto i = phi_node(blk, "i", 8, zero);
+  auto next_i = uadd(blk, "next_i", 8, {i, one});
+  i->operands.push_back(next_i);
+  auto i = write_ram(blk, ram, 256, 8, 1, {i, i});
+  auto result = read_ream(blk, ram, 256, 8, 1, {i});
+  auto wrout = wire_write(blk, "c", 8, result);
+
+  compile(blk);
+
+  REQUIRE(blk.arch.sched.num_stages() == 1);
+
+  int res = 
+    system("verilator --cc ram_write.v ram_write_techlib.v --top-module ram_write");
+  REQUIRE(res == 0);
+}
