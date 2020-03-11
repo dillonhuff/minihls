@@ -306,7 +306,7 @@ class micro_architecture {
 };
 
 template<typename N, typename E>
-class DirectedGraph {
+class directed_graph {
   public:
     map<N, set<pair<N, E > > > out_edges;
 
@@ -339,12 +339,12 @@ class DirectedGraph {
 };
 
 template<typename N, typename E>
-void diff_lte(DirectedGraph<N, E>& g, const N& a, const N& b, const E& v) {
+void diff_lte(directed_graph<N, E>& g, const N& a, const N& b, const E& v) {
   g.add_edge(b, a, v);
 }
 
 template<typename N, typename E>
-void diff_eq(DirectedGraph<N, E>& g, const N& a, const N& b, const E& v) {
+void diff_eq(directed_graph<N, E>& g, const N& a, const N& b, const E& v) {
   diff_lte(g, a, b, v);
   diff_lte(g, a, b, -v);
 }
@@ -465,7 +465,7 @@ class block {
   void asap_schedule() {
     cout << "Scheduling" << endl;
 
-    DirectedGraph<string, int> constraints;
+    directed_graph<string, int> constraints;
     constraints.add_node("$base");
     for (pair<string, instr*> instr : instrs) {
       cout << "Adding instruction to graph" << endl;
