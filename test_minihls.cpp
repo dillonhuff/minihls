@@ -347,6 +347,9 @@ TEST_CASE("phi node") {
   i->operands.push_back(next_i);
   auto wrout = wire_write(blk, "c", 32, i);
 
+  cout << "Block..." << endl;
+  cout << blk << endl;
+
   compile(blk);
 
   REQUIRE(blk.arch.sched.num_stages() == 1);
@@ -355,19 +358,92 @@ TEST_CASE("phi node") {
   REQUIRE(res == 0);
 }
 
+module_type*
+dual_port_ram_type(block& blk, const int depth, const int width, const int read_latency, const int write_latency) {
+  string name = "ram_" + to_string(depth) + "_" + str(width) + "_" + str(read_latency) + "_" + str(write_latency);
+  if (blk.has_module_type(name)) {
+    return blk.get_module_type(name);
+  }
+
+  vector<Port> pts{inpt("clk", 1),
+    inpt("rst", 1),
+    inpt("wen", 1),
+    inpt("ren", 1),
+    inpt("raddr", clog2(depth)),
+    inpt("waddr", clog2(depth)),
+    inpt("wdata", width),
+    outpt("rdata", width)};
+
+  return blk.add_module_type(name, pts);
+}
+
+module_instance*
+add_dual_port_ram(block& blk, const int depth, const int width, const int read_latency, const int write_latency) {
+  string name = "ram_" + to_string(depth) + "_" + str(width) + "_" + str(read_latency) + "_" + str(write_latency) + "_";
+  name = blk.unique_name(name);
+
+  module_type* wtp = dual_port_ram_type(blk, depth, width, read_latency, write_latency);
+
+  return blk.add_inst(name, wtp);
+}
+
+instruction_type*
+write_ram_instr(block& blk, const int depth, const int width, const int read_latency, const int write_latency) {
+
+  string name = "write_ram_instr_" + to_string(width) +
+    str(depth) + "_" + str(read_latency) + "_" +
+    str(write_latency);
+  if (blk.has_instruction_type(name)) {
+    return blk.get_instruction_type(name);
+  }
+
+  return blk.add_instruction_type(name);
+}
+
+instruction_binding*
+write_ram_binding(block& blk, const int depth, const int width, const int read_latency, const int write_latency) {
+  string name = "write_ram_binding" + str(width) + 
+    "_" + str(depth) + "_" + str(read_latency) + "_" + str(write_latency);
+  if (blk.has_instruction_binding(name)) {
+    return blk.get_instruction_binding(name);
+  }
+
+  return blk.add_instruction_binding(name, write_ram_instr(blk, depth, width, read_latency, write_latency),
+      dual_port_ram_type(blk, depth, width, read_latency, write_latency), "", {{0, "in"}});
+}
+
+instr* write_ram(block& blk, module_instance* ram, const int depth, const int width, const int read_latency, const int write_latency, const vector<instr*>& args) {
+  instruction_binding* rd_wire = 
+    write_ram_binding(blk, depth, width, read_latency, write_latency);
+
+  instruction_type* instr_tp =
+    write_ram_instr(blk, depth, width, read_latency, write_latency);
+
+  auto instr = blk.add_instr(blk.unique_name("write"), instr_tp, args);
+  instr->bind_procedure(rd_wire);
+  instr->bind_unit(ram);
+
+  return instr;
+}
+
+instr* read_ram(block& blk, module_instance* ram, const int depth, const int width, const int read_latency, const int write_latency, const vector<instr*>& args) {
+  assert(false);
+  return nullptr;
+}
+
 TEST_CASE("predicated operation") {
   block blk;
   blk.name = "ram_write";
 
-  auto ram = add_dual_port_ram(blk, 256, 8, 1);
+  auto ram = add_dual_port_ram(blk, 256, 8, 1, 1);
   auto zero = constant(blk, 0, 8);
   auto one = constant(blk, 1, 8);
 
   auto i = phi_node(blk, "i", 8, zero);
   auto next_i = uadd(blk, "next_i", 8, {i, one});
   i->operands.push_back(next_i);
-  auto i = write_ram(blk, ram, 256, 8, 1, {i, i});
-  auto result = read_ream(blk, ram, 256, 8, 1, {i});
+  write_ram(blk, ram, 256, 8, 1, 1, {i, i});
+  auto result = read_ram(blk, ram, 256, 8, 1, 1, {i});
   auto wrout = wire_write(blk, "c", 8, result);
 
   compile(blk);
@@ -378,3 +454,4 @@ TEST_CASE("predicated operation") {
     system("verilator --cc ram_write.v ram_write_techlib.v --top-module ram_write");
   REQUIRE(res == 0);
 }
+

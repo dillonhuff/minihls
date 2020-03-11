@@ -8,6 +8,14 @@ using namespace std;
 
 #define INT_INF 999999
 
+std::string str(const int i) {
+  return to_string(i);
+}
+
+int clog2(const int val) {
+  return ceil(log2(val));
+}
+
 static inline
 std::string sep_list(const std::vector<std::string>& strs, const std::string& ldelim, const std::string& rdelim, const std::string& sep) {
   string res = ldelim;
@@ -286,7 +294,7 @@ class micro_architecture {
     string wire_at(const int stage, instr* v) {
       assert(contains_key(v, source_wires));
       auto wires = map_find(v, source_wires);
-      cout << "Finding " << v->get_name() << " in stage: " << stage << endl;
+      //cout << "Finding " << v->get_name() << " in stage: " << stage << endl;
       assert(contains_key(stage, wires));
       return map_find(stage, wires);
     }
@@ -360,6 +368,10 @@ class block {
   string name;
 
   block() : un(0) {}
+
+  vector<instr*> instruction_list() const {
+    return instr_list;
+  }
 
   bool lexically_later_than(instr* a, instr* b) {
     for (auto instr : instr_list) {
@@ -511,12 +523,12 @@ class block {
       sched.end_times[i] = distance[endstr(i)] + shift;
     }
 
-    cout << "Done with scheduling" << endl;
-    for (auto instrP : instrs) {
-      auto instr = instrP.second;
-      cout << "Start of " << startstr(instr) << " -> " << sched.start_times[instr] << endl;
-      cout << "End of " << startstr(instr) << " -> " << sched.end_times[instr] << endl;
-    }
+    //cout << "Done with scheduling" << endl;
+    //for (auto instrP : instrs) {
+      //auto instr = instrP.second;
+      //cout << "Start of " << startstr(instr) << " -> " << sched.start_times[instr] << endl;
+      //cout << "End of " << startstr(instr) << " -> " << sched.end_times[instr] << endl;
+    //}
 
     arch.sched = sched;
 
@@ -593,6 +605,7 @@ class block {
 
   instruction_type* add_instruction_type(const std::string& name) {
     auto inst = new instruction_type();
+    inst->name = name;
     instruction_types[name] = inst;
     return inst;
   }
@@ -665,6 +678,19 @@ class block {
   }
 
 };
+
+std::ostream& operator<<(std::ostream& out, block& blk) {
+  out << blk.name << ": " << endl;
+  for (auto instr : blk.instruction_list()) {
+    vector<string> args;
+    for (auto op : instr->operands) {
+      args.push_back(op->get_name());
+    }
+    out << tab(1) << instr->get_name() << " = " << instr->get_type()->get_name() << " " << comma_list(args) << endl;
+  }
+
+  return out;
+}
 
 static inline
 void asap_schedule(block& blk) {
