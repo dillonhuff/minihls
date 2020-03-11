@@ -462,7 +462,7 @@ class block {
 
   // Primitive difference logic solver. For details see:
   // https://www.cs.upc.edu/~erodri/webpage/cps/theory/sat/SMT-DL/slides.pdf
-  void asap_schedule() {
+  void make_schedule() {
     cout << "Scheduling" << endl;
 
     directed_graph<string, int> constraints;
@@ -716,8 +716,8 @@ std::ostream& operator<<(std::ostream& out, block& blk) {
 }
 
 static inline
-void asap_schedule(block& blk) {
-  blk.asap_schedule();
+void schedule_block(block& blk) {
+  blk.make_schedule();
 }
 
 static inline
@@ -917,7 +917,7 @@ void emit_techlib(block& blk) {
 static inline
 void compile(block& blk) {
   finish_binding(blk);
-  asap_schedule(blk);
+  schedule_block(blk);
   emit_verilog(blk);
   emit_techlib(blk);
 }
