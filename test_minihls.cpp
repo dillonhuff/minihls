@@ -422,8 +422,9 @@ read_ram_binding(block& blk, const int depth, const int width, const int read_la
   }
 
   auto b = blk.add_instruction_binding(name, read_ram_instr(blk, depth, width, read_latency, write_latency),
-      dual_port_ram_type(blk, depth, width, read_latency, write_latency), "", {{0, "in"}});
+      dual_port_ram_type(blk, depth, width, read_latency, write_latency), "rdata", {{0, "raddr"}});
   b->latency = read_latency;
+  b->en = "ren";
   return b;
 }
 
@@ -436,8 +437,9 @@ write_ram_binding(block& blk, const int depth, const int width, const int read_l
   }
 
   auto bind = blk.add_instruction_binding(name, write_ram_instr(blk, depth, width, read_latency, write_latency),
-      dual_port_ram_type(blk, depth, width, read_latency, write_latency), "", {{0, "in"}});
+      dual_port_ram_type(blk, depth, width, read_latency, write_latency), "", {{0, "waddr"}, {1, "wdata"}});
   bind->latency = write_latency;
+  bind->en = "wen";
   return bind;
 }
 
@@ -469,7 +471,7 @@ instr* read_ram(block& blk, module_instance* ram, const int depth, const int wid
   return instr;
 }
 
-TEST_CASE("predicated operation") {
+TEST_CASE("predicated ram operation") {
   block blk;
   blk.name = "ram_write";
 
@@ -480,13 +482,15 @@ TEST_CASE("predicated operation") {
   auto i = phi_node(blk, "i", 8, zero);
   auto next_i = uadd(blk, "next_i", 8, {i, one});
   i->operands.push_back(next_i);
-  write_ram(blk, ram, 256, 8, 1, 1, {i, i});
+  auto wr = write_ram(blk, ram, 256, 8, 1, 1, {i, i});
   auto result = read_ram(blk, ram, 256, 8, 1, 1, {i});
   auto wrout = wire_write(blk, "c", 8, result);
 
+  blk.add_data_dependence(wr, result, 0);
+
   compile(blk);
 
-  REQUIRE(blk.arch.sched.num_stages() == 1);
+  REQUIRE(blk.arch.sched.num_stages() == 3);
 
   int res = 
     system("verilator --cc ram_write.v ram_write_techlib.v --top-module ram_write");

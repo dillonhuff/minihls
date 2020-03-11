@@ -179,6 +179,8 @@ class instruction_binding {
 
     string name;
     string output_wire;
+    string en;
+
     map<int, string> arg_map;
     instruction_type* target;
     module_type* mtp;
@@ -292,6 +294,9 @@ class micro_architecture {
     map<instr*, map<int, string> > source_wires;
 
     string wire_at(const int stage, instr* v) {
+      if (!contains_key(v, source_wires)) {
+        cout << "No source wire for " << v->get_name() << " at stage: " << stage << endl;
+      }
       assert(contains_key(v, source_wires));
       auto wires = map_find(v, source_wires);
       //cout << "Finding " << v->get_name() << " in stage: " << stage << endl;
@@ -356,6 +361,8 @@ class block {
 
   int un;
   vector<instr*> instr_list;
+  map<instr*, pair<instr*, int> > data_deps;
+
   map<string, instr*> instrs;
   map<string, module_instance*> instances;
   map<string, module_type*> module_types;
@@ -368,6 +375,11 @@ class block {
   string name;
 
   block() : un(0) {}
+
+  void add_data_dependence(instr* a, instr* b, const int dd) {
+    assert(dd == 0);
+    data_deps[a] = {b, dd};
+  }
 
   vector<instr*> instruction_list() const {
     return instr_list;
@@ -474,6 +486,17 @@ class block {
             startstr(instr.second),
             0);
       }
+    }
+
+    for (auto dep : data_deps) {
+      assert(dep.second.second == 0);
+
+      instr* src = dep.first;
+      instr* dst = dep.second.first;
+
+      assert(lexically_later_than(src, dst));
+
+      diff_lte(constraints, endstr(src), startstr(dst), 0);
     }
 
     map<string, int> distance;
@@ -793,6 +816,7 @@ void emit_verilog(block& blk) {
     out << tab(3) << blk.stage_active_var(i) << " <= " << blk.stage_active_var(i - 1) << ";" << endl;
     out << tab(3) << blk.is_iter_0_wire(i) << " <= " << blk.is_iter_0_wire(i - 1) << ";" << endl;
   }
+  out << endl;
 
   for (auto instr : blk.arch.source_wires) {
     vector<string> pipeline_sequence;
@@ -828,15 +852,29 @@ void emit_verilog(block& blk) {
 
       out << tab(1) << m->get_type()->get_name() << " " << m->get_name()
         << "(" << comma_list(port_strings) << ");" << endl;
+      for (auto pt : m->get_type()->ports) {
+        if (pt.name == "clk") {
+          out << tab(1) << "assign " << m->get_name() + "_" + pt.name + " = clk;" << endl;
+        } else if (pt.name == "rst") {
+          out << tab(1) << "assign " << m->get_name() + "_" + pt.name + " = rst;" << endl;
+        }
+      }
     }
 
     out << tab(1) << "// Bindings to " << m->get_name() << endl;
     for (auto bound_instr : blk.bound_instrs(m)) {
       out << tab(2) << "// " << bound_instr->get_name() << endl;
       auto binding = bound_instr->get_binding();
+
       if (binding->output_wire != "") {
         out << tab(1) << "assign " << bound_instr->get_name() << " = " << bound_instr->get_unit()->get_name() << "_" << binding->output_wire << ";" << endl;
       }
+      
+      if (binding->en!= "") {
+        string en_wire = blk.stage_active_var(blk.arch.sched.start_times[bound_instr]);
+        out << tab(1) << "assign " << bound_instr->get_unit()->get_name() << "_" << binding->en << " = " << en_wire << ";" << endl;
+      }
+
       for (auto b : binding->arg_map) {
         assert(bound_instr->operands.size() >= b.first);
         out << tab(1) << "assign "
