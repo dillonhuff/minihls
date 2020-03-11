@@ -12,7 +12,7 @@ module_type* float_add_l2_type(block& blk, const int width) {
     return blk.get_module_type(name);
   }
 
-  vector<Port> pts{inpt("in0", width),
+  vector<port> pts{inpt("in0", width),
     inpt("in1", width),
     outpt("out", width)};
 
@@ -25,7 +25,7 @@ module_type* phi_type(block& blk, const int width) {
     return blk.get_module_type(name);
   }
 
-  vector<Port> pts{inpt("init_val", width),
+  vector<port> pts{inpt("init_val", width),
     inpt("next_val", width),
     inpt("is_iter_0", 1),
     outpt("out", width)};
@@ -41,7 +41,7 @@ module_type* uadd_type(block& blk, const int width) {
     return blk.get_module_type(name);
   }
 
-  vector<Port> pts{inpt("in0", width),
+  vector<port> pts{inpt("in0", width),
     inpt("in1", width),
     outpt("out", width)};
 
@@ -55,7 +55,7 @@ module_type* wire_type(block& blk, const int width) {
     return blk.get_module_type(name);
   }
 
-  vector<Port> pts{inpt("in", width), outpt("out", width)};
+  vector<port> pts{inpt("in", width), outpt("out", width)};
   string body = tab(1) + "assign out = in;";
   return blk.add_module_type(name, pts, body);
 }
@@ -66,7 +66,7 @@ module_type* constant_type(block& blk, const int value, const int width) {
     return blk.get_module_type(name);
   }
 
-  vector<Port> pts{outpt("out", width)};
+  vector<port> pts{outpt("out", width)};
   string body = tab(1) + "assign out = " + to_string(width) + "'d" + to_string(value) + ";";
   return blk.add_module_type(name, pts, body);
 }
@@ -365,7 +365,7 @@ dual_port_ram_type(block& blk, const int depth, const int width, const int read_
     return blk.get_module_type(name);
   }
 
-  vector<Port> pts{inpt("clk", 1),
+  vector<port> pts{inpt("clk", 1),
     inpt("rst", 1),
     inpt("wen", 1),
     inpt("ren", 1),

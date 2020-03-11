@@ -68,7 +68,7 @@ std::string tab(const int i) {
   return s;
 }
 
-class Port {
+class port {
   public:
 
     string name;
@@ -88,11 +88,11 @@ class Port {
     }
 };
 
-Port outpt(const string& s, const int w) {
+port outpt(const string& s, const int w) {
   return {s, w, false};
 }
 
-Port inpt(const string& s, const int w) {
+port inpt(const string& s, const int w) {
   return {s, w, true};
 }
 
@@ -100,10 +100,10 @@ class module_type {
   public:
 
     string name;
-    vector<Port> ports;
+    vector<port> ports;
     string body;
 
-    Port get_port(const std::string& pname) const {
+    port get_port(const std::string& pname) const {
       for (auto p : ports) {
         if (p.name == pname) {
           return p;
@@ -139,7 +139,7 @@ class module_instance {
 
     module_type* get_type() const { return tp; }
 
-    Port get_port(const string& n) const {
+    port get_port(const string& n) const {
       for (auto p : tp->ports) {
         if (p.name == n) {
           return p;
@@ -149,7 +149,7 @@ class module_instance {
       assert(false);
     }
 
-    vector<Port> ports() const {
+    vector<port> ports() const {
       return tp->ports;
     }
 
@@ -221,7 +221,7 @@ class instruction_instance {
       return get_binding()->output_wire != "";
     }
 
-    Port output_port() const {
+    port output_port() const {
       return unit->get_port(get_binding()->output_wire);
     }
 
@@ -650,11 +650,11 @@ class block {
     return ms;
   }
 
-  module_type* add_module_type(const std::string& name, const vector<Port>& pts) {
+  module_type* add_module_type(const std::string& name, const vector<port>& pts) {
     return add_module_type(name, pts, "");
   }
 
-  module_type* add_module_type(const std::string& name, const vector<Port>& pts, const std::string& body) {
+  module_type* add_module_type(const std::string& name, const vector<port>& pts, const std::string& body) {
     auto inst = new module_type();
     inst->name = name;
     inst->ports = pts;
@@ -792,7 +792,7 @@ void emit_verilog(block& blk) {
       if (time.first > blk.arch.sched.end_times[instr.first]) {
         string output =
           instr.first->get_binding()->output_wire;
-        Port pt =
+        port pt =
           instr.first->get_unit()->get_port(output);
         out << tab(1) << "reg [" << (pt.width - 1) << ":0]" << " " << time.second << ";" << endl;
       }
