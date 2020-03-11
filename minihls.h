@@ -523,12 +523,12 @@ class block {
       sched.end_times[i] = distance[endstr(i)] + shift;
     }
 
-    //cout << "Done with scheduling" << endl;
-    //for (auto instrP : instrs) {
-      //auto instr = instrP.second;
-      //cout << "Start of " << startstr(instr) << " -> " << sched.start_times[instr] << endl;
-      //cout << "End of " << startstr(instr) << " -> " << sched.end_times[instr] << endl;
-    //}
+    cout << "Done with scheduling" << endl;
+    for (auto instrP : instrs) {
+      auto instr = instrP.second;
+      cout << "Start of " << (instr->get_name()) << " -> " << sched.start_times[instr] << endl;
+      cout << "End of " << (instr->get_name()) << " -> " << sched.end_times[instr] << endl;
+    }
 
     arch.sched = sched;
 
