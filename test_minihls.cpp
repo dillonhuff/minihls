@@ -492,8 +492,14 @@ TEST_CASE("predicated ram operation") {
 
   REQUIRE(blk.arch.sched.num_stages() == 3);
 
+  system("rm -rf ./obj_dir");
   int res = 
-    system("verilator --cc ram_write.v ram_write_techlib.v --top-module ram_write");
+    system("verilator --cc ram_write.v ram_write_techlib.v --exe tb_ram_write.cpp --top-module ram_write &");
   REQUIRE(res == 0);
+
+  int cres =
+    system("make -C obj_dir Vram_write.mk Vram_write.cpp &");
+  REQUIRE(cres == 0);
+
 }
 
