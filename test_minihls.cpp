@@ -498,7 +498,7 @@ TEST_CASE("predicated ram operation") {
   REQUIRE(res == 0);
 
   int cres =
-    system("make -C obj_dir Vram_write.mk Vram_write");
+    system("make -C obj_dir -f Vram_write.mk Vram_write");
   REQUIRE(cres == 0);
 
 }
