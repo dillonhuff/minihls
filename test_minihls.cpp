@@ -376,6 +376,8 @@ dual_port_ram_type(block& blk, const int depth, const int width, const int read_
 
   ostringstream ss;
   ss << tab(1) << "reg [" << width - 1 << ":0] data [" << depth - 1 << ":0];" << endl << endl;
+  ss << tab(1) << "reg [" << width - 1 << ":0] rdata_d;" << endl << endl;
+  ss << tab(1) << "assign rdata = rdata_d;" << endl << endl;
   ss << tab(1) << "always @(posedge clk) begin" << endl;
 
   ss << tab(2) << "if (wen) begin" << endl;
@@ -385,7 +387,7 @@ dual_port_ram_type(block& blk, const int depth, const int width, const int read_
 
   ss << tab(2) << "if (ren) begin" << endl;
   //ss << tab(3) << "$display(\"reading addr: %d\", raddr);" << endl;
-  ss << tab(3) << "rdata <= data[raddr];" << endl;
+  ss << tab(3) << "rdata_d <= data[raddr];" << endl;
   ss << tab(2) << "end" << endl << endl;
 
   ss << tab(1) << "end" << endl;

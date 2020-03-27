@@ -8,10 +8,12 @@ using namespace std;
 
 #define INT_INF 999999
 
+static inline
 std::string str(const int i) {
   return to_string(i);
 }
 
+static inline
 int clog2(const int val) {
   return ceil(log2(val));
 }
@@ -60,6 +62,7 @@ is_prefix( std::string const& lhs, std::string const& rhs )
         rhs.begin() );
 }
 
+static inline
 std::string tab(const int i) {
   string s = "";
   for (int k = 0; k < i; k++) {
@@ -88,10 +91,12 @@ class port {
     }
 };
 
+static inline
 port outpt(const string& s, const int w) {
   return {s, w, false};
 }
 
+static inline
 port inpt(const string& s, const int w) {
   return {s, w, true};
 }
@@ -349,10 +354,12 @@ void diff_eq(directed_graph<N, E>& g, const N& a, const N& b, const E& v) {
   diff_lte(g, a, b, -v);
 }
 
+static inline
 string endstr(instr* i) {
   return "$end_" + i->get_name();
 }
 
+static inline
 string startstr(instr* i) {
   return "$start_" + i->get_name();
 }
@@ -719,6 +726,7 @@ class block {
 
 };
 
+static inline
 std::ostream& operator<<(std::ostream& out, block& blk) {
   out << blk.name << ": " << endl;
   for (auto instr : blk.instruction_list()) {
