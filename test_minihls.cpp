@@ -374,7 +374,25 @@ dual_port_ram_type(block& blk, const int depth, const int width, const int read_
     inpt("wdata", width),
     outpt("rdata", width)};
 
-  return blk.add_module_type(name, pts);
+  ostringstream ss;
+  ss << tab(1) << "reg [" << width - 1 << ":0] data [" << depth - 1 << ":0];" << endl << endl;
+  ss << tab(1) << "always @(posedge clk) begin" << endl;
+
+  ss << tab(2) << "if (wen) begin" << endl;
+  //ss << tab(3) << "$display(\"writing %d\", wdata);" << endl;
+  ss << tab(3) << "data[waddr] <= wdata;" << endl;
+  ss << tab(2) << "end" << endl << endl;
+
+  ss << tab(2) << "if (ren) begin" << endl;
+  //ss << tab(3) << "$display(\"reading addr: %d\", raddr);" << endl;
+  ss << tab(3) << "rdata <= data[raddr];" << endl;
+  ss << tab(2) << "end" << endl << endl;
+
+  ss << tab(1) << "end" << endl;
+
+  string body = ss.str();
+
+  return blk.add_module_type(name, pts, body);
 }
 
 module_instance*
@@ -485,7 +503,9 @@ TEST_CASE("predicated ram operation") {
   auto wr = write_ram(blk, ram, 256, 8, 1, 1, {i, i});
   auto result = read_ram(blk, ram, 256, 8, 1, 1, {i});
   auto wrout = wire_write(blk, "c", 8, result);
+  auto out_valid = wire_write(blk, "c_valid", 1, constant(blk, 1, 1));
 
+  blk.eq(endstr(wrout), endstr(out_valid), 0);
   blk.add_data_dependence(wr, result, 0);
 
   compile(blk);
@@ -501,5 +521,8 @@ TEST_CASE("predicated ram operation") {
     system("make -C obj_dir -f Vram_write.mk Vram_write");
   REQUIRE(cres == 0);
 
+  int run_res =
+    system("./obj_dir/Vram_write");
+  REQUIRE(run_res == 0);
 }
 

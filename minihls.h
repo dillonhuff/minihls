@@ -357,6 +357,12 @@ string startstr(instr* i) {
   return "$start_" + i->get_name();
 }
 
+struct constraint {
+  string l;
+  string r;
+  int d;
+};
+
 class block {
 
   int un;
@@ -369,12 +375,19 @@ class block {
   map<string, instruction_binding*> instruction_bindings;
   map<string, instruction_type*> instruction_types;
 
+  vector<constraint> extra_constraints;
+
   public:
 
   micro_architecture arch;
   string name;
 
   block() : un(0) {}
+
+  void eq(const string& a, const string& b, const int d) {
+    extra_constraints.push_back({a, b, d});
+    extra_constraints.push_back({a, b, -d});
+  }
 
   void add_data_dependence(instr* a, instr* b, const int dd) {
     assert(dd == 0);
@@ -467,6 +480,10 @@ class block {
 
     directed_graph<string, int> constraints;
     constraints.add_node("$base");
+    for (auto c : extra_constraints) {
+      diff_lte(constraints, c.l, c.r, c.d);
+    }
+
     for (pair<string, instr*> instr : instrs) {
       cout << "Adding instruction to graph" << endl;
       auto i = instr.second;
