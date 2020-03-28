@@ -4,6 +4,7 @@
 
 #include "minihls.h"
 
+using namespace minihls;
 using namespace std;
 
 module_type* float_add_l2_type(block& blk, const int width) {
